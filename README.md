@@ -47,7 +47,7 @@
 
 ---
 
-## What is MPEG-TS?
+### What is MPEG-TS?
 
 - MPEG-TS (MPEG Transport Stream) is a digital container that multiplexes multiple audio and video streams into a single bitstream.
 - Maintains stream integrity in unreliable environments (internet, satellite).
@@ -57,7 +57,7 @@
 
 ---
 
-## Compression & Segmentation
+### Compression & Segmentation
 
 - **Packaging ≠ compression:** If you want smaller files, adjust the encoder, not the segmenter.
 - **Expect only a ~5% bump** when moving from MP4 to HLS‑TS at normal streaming bit‑rates.
