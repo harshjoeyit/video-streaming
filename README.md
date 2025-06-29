@@ -9,6 +9,9 @@ Used: 7.7.1
 2. Video codec: H.264 + AAC
 3. Segment length: Six‑second segments (-hls_time 6) are a safe default.
 
+API docs:
+https://web.postman.co/workspace/My-Workspace~52c68d62-65f0-4416-8915-0c154d43c09b/collection/13052768-43235c2a-53e0-458b-970b-8fa38f9a16bb?action=share&source=copy-link&creator=13052768
+
 Basics:
 - https://howvideo.works/ 
 

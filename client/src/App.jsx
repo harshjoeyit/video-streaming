@@ -20,11 +20,13 @@ export default function App() {
 
   return (
     <div className="App">
-      <header className="App-header">
-        <h1>Video Streaming App</h1>
+      <h2>Video Streaming App</h2>
+      <div
+        style={{ display: "flex", flexDirection: "row", alignItems: "center" }}
+      >
         <VideoList videos={videos} onSelect={setSelectedVideoId} />
-        { selectedVideoId && <VideoPlayer src={getVideoSrc(selectedVideoId)} /> }
-      </header>
+        {selectedVideoId && <VideoPlayer src={getVideoSrc(selectedVideoId)} />}
+      </div>
     </div>
   );
 }
@@ -32,14 +34,14 @@ export default function App() {
 function VideoList({ videos, onSelect }) {
   return (
     <div>
-      <h2>Available Videos</h2>
-      <ul>
+      <h4>Available Videos</h4>
+      <ol>
         {videos.map((id) => (
-          <li key={id}>
+          <li key={id} style={{ fontSize: "14px" }}>
             <button onClick={() => onSelect(id)}>{id}</button>
           </li>
         ))}
-      </ul>
+      </ol>
     </div>
   );
 }
@@ -59,7 +61,7 @@ function VideoPlayer({ src }) {
 
   return (
     <div>
-      <h2>Playing: {src}</h2>
+      <h4>Playing: {src}</h4>
       <video ref={ref} controls style={{ width: "300px" }} />
     </div>
   );
