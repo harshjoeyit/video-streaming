@@ -50,7 +50,8 @@ func uploadHandler(c *gin.Context) {
 	// Start transcoding the video to HLS format in a separate goroutine
 	// Allows the server to respond immediately while processing continues
 	go func(fileID string) {
-		if err := transcoder.TranscodeToHLS(fileID); err != nil {
+		// if err := transcoder.TranscodeToHLS(fileID); err != nil {
+		if err := transcoder.TranscodeToMultiRenditionHLS(fileID); err != nil {
 			log.Printf("failed to transcode video: %v", err)
 
 			// Set status to "FAILED" in Redis
