@@ -1,97 +1,111 @@
-Video streaming prototype for Video on demand
+# Video Streaming Prototype for Video on Demand (VoD)
 
-Requirements:
-go: 1.24.1
-ffmpeg binary installed and set in $PATH
-Used: 7.7.1
+## Requirements
+- Go: 1.24.1
+- ffmpeg (v7.7.1) binary installed and set in `$PATH`
 
-1. Packaging protocol: Http Live Stream (HLS)
-2. Video codec: H.264 + AAC
-3. Segment length: Six‑second segments (-hls_time 6) are a safe default.
+---
 
-API docs:
-https://web.postman.co/workspace/My-Workspace~52c68d62-65f0-4416-8915-0c154d43c09b/collection/13052768-43235c2a-53e0-458b-970b-8fa38f9a16bb?action=share&source=copy-link&creator=13052768
+## Features
 
-Basics:
-- https://howvideo.works/ 
+1. **Packaging protocol:** HTTP Live Streaming (HLS)
+2. **Video codec:** H.264 + AAC
+3. **Segment length:** Six‑second segments (`-hls_time 6`) are a safe default.
 
-- What is m3u8 file?
-    - Playlist: M3U files are playlists, meaning they organize and list media files. 
-    - Text-based: They are plain text files, typically with a .m3u or .m3u8 extension. 
-    - References, not media: M3U files contain paths to media files (audio or video) on your computer or on the internet, not the media data itself. 
-    - Common uses: M3U files are used for streaming internet radio, creating custom playlists for music or videos, and in HTTP Live Streaming (HLS)
+---
 
+## API Docs
 
-Bitrate: Data transferred per unit time.
-File size = bitrate * duration
-CBR vs VBR: most live streaming uses CBR
-Codecs: Coder / Decoder - kind of like a language
-    Video codec: 
-        H.246 is a compression standard and another name for Advanced Video Coding (AVC). It's a lossy compression method that reduces file sizes while maintaining good video quality, making it ideal for various applications like streaming, Blu-ray discs, and broadcast television. 
-        H.265 (HEVC):
-        Pros: Up to 50% better compression efficiency than H.264, allowing for smaller file sizes or better quality at the same size, ideal for streaming high-definition content. 
-        Cons: Requires more processing power, potentially impacting performance on older devices, compatibility is not as widespread as H.264
-    AAC - Advanced Audio Coding, is a digital audio compression format known for its efficiency and higher quality compared to MP3 at the same bitrates.
-    Bitrate is used during encoding which affects the quality of the footage. Higher bitrate would result in better quality but more file size.
-    Container (MOV, MP4, MKV) contains the Codec file.
+[Postman Collection Link](https://web.postman.co/workspace/My-Workspace~52c68d62-65f0-4416-8915-0c154d43c09b/collection/13052768-43235c2a-53e0-458b-970b-8fa38f9a16bb?action=share&source=copy-link&creator=13052768)
 
-What is MPEG-TS?
-    MPEG-TS, or MPEG Transport Stream, is a digital container which multiplexes multiple audio and video streams into a single bitstream. 
-    - It's known for its ability to maintain stream integrity even in unreliable environments like the internet or satellite links.
-    - It uses small packets, each with a header containing information like timing and sequence, to ensure proper reassembly at the receiving end. 
-    - MPEG-TS includes features for error correction and synchronization, which is crucial for maintaining a stable stream, especially in environments prone to packet loss or network congestion
-    - It is optimized (and widely used) for live streaming, digital TV broadcasts
+---
 
-MPEG - Moving Pictures Expert Group
+## Basics
 
-https://ffmpeg.org/ffmpeg-formats.html#hls-2
+### [How Video Works](https://howvideo.works/)
 
+### What is an m3u8 file?
 
-For compression along with segmenetation:
+- **Playlist:** M3U files are playlists, meaning they organize and list media files.
+- **Text-based:** They are plain text files, typically with a `.m3u` or `.m3u8` extension.
+- **References, not media:** M3U files contain paths to media files (audio or video) on your computer or on the internet, not the media data itself.
+- **Common uses:** M3U files are used for streaming internet radio, creating custom playlists for music or videos, and in HTTP Live Streaming (HLS).
 
-- Packaging ≠ compression. If you want smaller files, dial the encoder, not the segmenter.
-- Expect only a ~5 % bump when moving from MP4 to HLS‑TS at normal streaming bit‑rates.
+---
 
-1. The CRF (Constant Rate Factor) mode is ideal if:
-    You want good visual quality
-    But you don’t care about exact bitrates
-    And you’re okay with slight variation in size per video
-    Use case: Video on Demand (VoD)
+### Video Concepts
 
-    ```
+- **Bitrate:** Data transferred per unit time.  
+  `File size = bitrate * duration`
+- **CBR vs VBR:** Most live streaming uses CBR (Constant Bitrate).
+- **Codecs:** Coder / Decoder - kind of like a language.
+    - **Video codec:**  
+      - **H.264:** Also known as AVC, a lossy compression standard for good quality and small file sizes.
+      - **H.265 (HEVC):** Up to 50% better compression than H.264, but requires more processing power and has less compatibility.
+    - **AAC:** Advanced Audio Coding, more efficient and higher quality than MP3 at the same bitrates.
+- **Container:** (MOV, MP4, MKV) contains the codec file.
+
+---
+
+## What is MPEG-TS?
+
+- MPEG-TS (MPEG Transport Stream) is a digital container that multiplexes multiple audio and video streams into a single bitstream.
+- Maintains stream integrity in unreliable environments (internet, satellite).
+- Uses small packets with headers for timing and sequence.
+- Includes error correction and synchronization.
+- Widely used for live streaming and digital TV broadcasts.
+
+---
+
+## Compression & Segmentation
+
+- **Packaging ≠ compression:** If you want smaller files, adjust the encoder, not the segmenter.
+- **Expect only a ~5% bump** when moving from MP4 to HLS‑TS at normal streaming bit‑rates.
+
+---
+
+### Encoding Tips
+
+#### 1. **CRF (Constant Rate Factor) Mode**
+
+- Ideal if you want good visual quality and don't care about exact bitrates.
+- Use case: Video on Demand (VoD)
+- Example:
+    ```sh
     -c:v libx264 -crf 26 -preset slow
     ```
+- **CRF ranges:**
+    - 18–20: Visually lossless (high quality, large size)
+    - 23 (default): Decent quality, medium size
+    - 28–32: Much smaller file, visibly compressed
 
-    CRF ranges:
-    18–20 → visually lossless (high quality, large size)
-    23 (default) → decent quality, medium size
-    28–32 → much smaller file, visibly compressed
+#### 2. **Set Explicit Bitrate**
 
-2. Set Explicit Bitrate (if you want consistent size)
-    Instead of CRF, you can target a specific bitrate, for example:
-
-    ```
+- For consistent file size, use:
+    ```sh
     -c:v libx264 -b:v 1M -maxrate 1M -bufsize 2M
     ```
-    1M = 1 megabit/sec (≈ 450 MB/hour video)
-    This gives you more predictable file sizes, especially useful if you're billing per GB on CDN.
-    Use case: Live streaming
+- 1M = 1 megabit/sec (≈ 450 MB/hour video)
+- Use case: Live streaming
 
+#### 3. **Downscale Resolution**
 
- 3. Downscale Resolution (big size savings)
-    If you're streaming only to mobile/web, reducing resolution gives massive savings:
-    854x480	Saves ~60% space vs 1080p
+- Reducing resolution gives massive savings.
+- Example: 854x480 saves ~60% space vs 1080p.
 
-    1M = 1 megabit/sec (≈ 450 MB/hour video)
+#### 4. **Use a More Efficient Codec**
 
-4. Use a More Efficient Codec (optional for modern clients)
-    H.265 (HEVC) compresses better than H.264, ~30–50% smaller at same quality. Con: limited support
+- H.265 (HEVC) compresses better than H.264 (~30–50% smaller at same quality).
+- Con: limited support.
 
+---
 
-What is a `.m3u8` file?
+### What is a `.m3u8` file?
 
 - `.m3u8` files are UTF-8 encoded playlists used in HLS to stream media by dividing it into smaller `.ts` (MPEG-TS) segments.
 - These files list the metadata and segments required for playback.
+
+**Example (Single Rendition):**
 
 ```
 #EXTM3U                     // Format .m3u (required for HLS)
@@ -109,6 +123,39 @@ segment_002.ts
 
 ```
 
-More details - https://chatgpt.com/share/6860c089-b284-8012-8a27-b456c24584df
+**Example (Multipel Renditions - ABR):**
 
-More details - https://chatgpt.com/share/6860c0a0-0e94-8012-a930-aaadaeed404b
+```
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-STREAM-INF:BANDWIDTH=602081,AVERAGE-BANDWIDTH=573792,RESOLUTION=426x240,CODECS="avc1.64001e,mp4a.40.2"
+v240p/prog.m3u8
+
+#EXT-X-STREAM-INF:BANDWIDTH=1062305,AVERAGE-BANDWIDTH=978475,RESOLUTION=854x480,CODECS="avc1.64001f,mp4a.40.2"
+v480p/prog.m3u8
+
+#EXT-X-STREAM-INF:BANDWIDTH=2485931,AVERAGE-BANDWIDTH=2190930,RESOLUTION=1280x720,CODECS="avc1.640020,mp4a.40.2"
+v720p/prog.m3u8
+```
+***v720p/prog.m3u8***
+```
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:8
+#EXT-X-MEDIA-SEQUENCE:0
+#EXT-X-PLAYLIST-TYPE:VOD
+#EXTINF:8.333333,
+seg_000.ts
+#EXTINF:4.166667,
+seg_001.ts
+#EXTINF:8.333333,
+seg_002.ts
+#EXT-X-ENDLIST
+```
+
+
+### References
+
+- [ffmpeg HLS documentation](https://ffmpeg.org/ffmpeg-formats.html#hls-2)
+- [ChatGPT Explanation 1](https://chatgpt.com/share/6860c089-b284-8012-8a27-b456c24584df)
+- [ChatGPT Explanation 2](https://chatgpt.com/share/6860c0a0-0e94-8012-a930-aaadaeed404b)
