@@ -2,9 +2,15 @@ package transcoder
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/harshjoeyit/video-streaming/storage"
 	ffmpeg "github.com/u2takey/ffmpeg-go"
+)
+
+const (
+	SingleRendition = "single"
+	MultiRendition  = "multi"
 )
 
 // Single Rendition HLS transcoding
@@ -22,11 +28,7 @@ func TranscodeToHLS(fileId string) error {
 		return fmt.Errorf("failed to create dir for segments: %w", err)
 	}
 
-	manifestFile, err := storage.GetVideoManifestPath(fileId)
-	if err != nil {
-		return fmt.Errorf("failed to get manifest file path: %w", err)
-	}
-
+	manifestFile := filepath.Join(dstDir, "playlist.m3u8")
 	segPatternPath := storage.GetVideoSegmentPatternPath(fileId)
 
 	return ffmpeg.

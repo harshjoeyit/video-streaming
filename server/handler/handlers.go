@@ -27,6 +27,16 @@ func uploadHandler(c *gin.Context) {
 		return
 	}
 
+	// Single rendition or multi-rendition (ABR)
+	rendition := c.PostForm("rendition")
+	if rendition != "single" && rendition != "multi" {
+		c.JSON(
+			http.StatusBadRequest,
+			gin.H{"error": "Invalid rendition type. Use 'single' or 'multi'."},
+		)
+		return
+	}
+
 	// Generate a unique file ID using UUID
 	fileID := uuid.New().String()
 
@@ -50,16 +60,30 @@ func uploadHandler(c *gin.Context) {
 	// Start transcoding the video to HLS format in a separate goroutine
 	// Allows the server to respond immediately while processing continues
 	go func(fileID string) {
-		// if err := transcoder.TranscodeToHLS(fileID); err != nil {
-		if err := transcoder.TranscodeToMultiRenditionHLS(fileID); err != nil {
-			log.Printf("failed to transcode video: %v", err)
+		switch rendition {
+		case transcoder.SingleRendition:
+			if err := transcoder.TranscodeToHLS(fileID); err != nil {
+				log.Printf("failed to transcode video: %v", err)
 
-			// Set status to "FAILED" in Redis
-			if err := storage.SetVideoProcStatus(fileID, storage.StatusFailed); err != nil {
-				log.Printf("failed to set file status in Redis: %v", err)
+				// Set status to "FAILED" in Redis
+				if err := storage.SetVideoProcStatus(fileID, storage.StatusFailed); err != nil {
+					log.Printf("failed to set file status in Redis: %v", err)
+				}
+
+				return
 			}
+		case transcoder.MultiRendition:
+			// if err := transcoder.TranscodeToHLS(fileID); err != nil {
+			if err := transcoder.TranscodeToMultiRenditionHLS(fileID); err != nil {
+				log.Printf("failed to transcode video: %v", err)
 
-			return
+				// Set status to "FAILED" in Redis
+				if err := storage.SetVideoProcStatus(fileID, storage.StatusFailed); err != nil {
+					log.Printf("failed to set file status in Redis: %v", err)
+				}
+
+				return
+			}
 		}
 
 		// Set status to "READY" in Redis
@@ -113,6 +137,7 @@ func playlistHandler(c *gin.Context) {
 
 	playlistPath, err := storage.GetVideoManifestPath(videoID)
 	if err != nil {
+		log.Printf("failed to serve video manifest: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -133,6 +158,72 @@ func segmentHandler(c *gin.Context) {
 	}
 
 	segmentPath, err := storage.GetVideoSegmentPath(videoID, segment)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Serve the segment file
+	c.File(segmentPath)
+}
+
+// Adaptive Bitrate Streaming (ABR) handlers
+
+// playlistHandlerABR serves master file
+func playlistHandlerABR(c *gin.Context) {
+	videoID := c.Param("id")
+	if videoID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Video ID is required"})
+		return
+	}
+
+	masterPlaylistFile, err := storage.GetVideoManifestPathABR(videoID)
+	if err != nil {
+		log.Printf("failed to serve master video manifest: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Serve the manifest file
+	c.File(masterPlaylistFile)
+}
+
+func renditionPlaylistHandler(c *gin.Context) {
+	videoID := c.Param("id")
+	rendition := c.Param("rendition")
+	if videoID == "" || rendition == "" {
+		c.JSON(
+			http.StatusBadRequest,
+			gin.H{"error": "Video ID and rendition are required"},
+		)
+		return
+	}
+
+	playlistPath, err := storage.GetRenditionPlaylistPath(videoID, rendition)
+	if err != nil {
+		c.JSON(
+			http.StatusInternalServerError,
+			gin.H{"error": err.Error()})
+		return
+	}
+
+	// Serve the rendition playlist file (eg. /v0/prog.m3u8)
+	c.File(playlistPath)
+}
+
+func segmentHandlerABR(c *gin.Context) {
+	videoID := c.Param("id")
+	rendition := c.Param("rendition")
+	segment := c.Param("segment")
+	if videoID == "" || rendition == "" || segment == "" {
+		c.JSON(
+			http.StatusBadRequest,
+			gin.H{"error": "Video ID, rendition and segment are required"},
+		)
+		return
+	}
+
+	segmentPath, err := storage.GetVideoSegmentPathABR(videoID, rendition, segment)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

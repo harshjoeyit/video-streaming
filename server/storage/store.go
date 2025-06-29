@@ -12,8 +12,8 @@ import (
 // Store the uploaded video file. Read and return manifest and segments
 
 const (
-	uploadedVideosPath = "uploaded_videos"
-	chunkedVideosPath  = "chunked_videos"
+	uploadedVideosPath = "assets/uploaded_videos"
+	chunkedVideosPath  = "assets/chunked_videos"
 )
 
 func InitVideoStorage() error {
@@ -43,19 +43,32 @@ func UploadVideo(
 	return nil
 }
 
+type VideoItem struct {
+	ID  string `json:"id"`
+	ABR bool   `json:"abr"`
+}
+
 // GetProcessedVideoList returns a list of processed video directories
-func GetProcessedVideoList() ([]string, error) {
+func GetProcessedVideoList() ([]VideoItem, error) {
 	files, err := os.ReadDir(chunkedVideosPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read videos: %w", err)
 	}
 
-	fmt.Printf("Found %d processed video directories, %v\n", len(files), files)
-
-	videoList := []string{}
+	videoList := []VideoItem{}
 	for _, file := range files {
 		if file.IsDir() {
-			videoList = append(videoList, file.Name())
+			item := VideoItem{
+				ID:  file.Name(),
+				ABR: false,
+			}
+
+			masterPath := filepath.Join(chunkedVideosPath, file.Name(), "master.m3u8")
+			if _, err := os.Stat(masterPath); err == nil {
+				item.ABR = true
+			}
+
+			videoList = append(videoList, item)
 		}
 	}
 
@@ -72,14 +85,28 @@ func GetChunkedVideoPath(fileID string) string {
 	return filepath.Join(chunkedVideosPath, fileID)
 }
 
-// GetVideoManifestPath returns the path for the video manifest file (m3u8)
-// This is used for transcoding to HLS format
+// getVideoManifestPath returns the path for the video manifest file (m3u8)
+// based on the rendition type.
+func getVideoManifestPath(fileID string, rendition string) string {
+	// For single rendition HLS, the manifest file is named "playlist.m3u8"
+	switch rendition {
+	case "single":
+		return filepath.Join(GetChunkedVideoPath(fileID), "playlist.m3u8")
+	case "multi":
+		return filepath.Join(GetChunkedVideoPath(fileID), "master.m3u8")
+	default:
+		return ""
+	}
+}
+
+// ServeVideoManifest returns the path for the video manifest file
+// if exists, otherwise return error
 func GetVideoManifestPath(fileID string) (string, error) {
-	path := filepath.Join(GetChunkedVideoPath(fileID), "playlist.m3u8")
+	path := getVideoManifestPath(fileID, "single")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return "", fmt.Errorf("manifest file does not exist: %s", path)
+		return "", fmt.Errorf("manifest file does not exist for file ID %s: %w", fileID, err)
 	} else if err != nil {
-		return "", fmt.Errorf("error checking manifest file: %w", err)
+		return "", fmt.Errorf("failed to get manifest for file ID %s: %w", fileID, err)
 	}
 
 	return path, nil
@@ -97,11 +124,49 @@ func GetVideoSegmentPath(fileID, segment string) (string, error) {
 	return path, nil
 }
 
+// For Adaptive Bitrate Streaming
+
+func GetVideoManifestPathABR(fileID string) (string, error) {
+	path := getVideoManifestPath(fileID, "multi")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return "", fmt.Errorf("master file does not exist for file ID %s: %w", fileID, err)
+	} else if err != nil {
+		return "", fmt.Errorf("failed to get master for file ID %s: %w", fileID, err)
+	}
+
+	return path, nil
+}
+
+func GetRenditionPlaylistPath(fileID, rendition string) (string, error) {
+	path := filepath.Join(GetChunkedVideoPath(fileID), rendition, "prog.m3u8")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return "", fmt.Errorf("rendition playlist file does not exist: %s", path)
+	} else if err != nil {
+		return "", fmt.Errorf("error checking rendition playlist file: %w", err)
+	}
+
+	return path, nil
+}
+
+// GetVideoSegmentPathABR returns the path for a specific video segment
+// for the given file and rendition
+func GetVideoSegmentPathABR(fileID, rendition, segment string) (string, error) {
+	path := filepath.Join(GetChunkedVideoPath(fileID), rendition, segment)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return "", fmt.Errorf("segment file does not exist: %s", path)
+	} else if err != nil {
+		return "", fmt.Errorf("error checking segment file: %w", err)
+	}
+
+	return path, nil
+}
+
 // GetVideoSegmentPatternPath returns the pattern path for video segments
 // This is used for transcoding to HLS format
 func GetVideoSegmentPatternPath(fileID string) string {
 	return filepath.Join(GetChunkedVideoPath(fileID), "segment_%03d.ts")
 }
+
 func CreateDirectoryIfNotExists(dir string) error {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		if err := os.MkdirAll(dir, 0755); err != nil {

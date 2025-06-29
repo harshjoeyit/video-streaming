@@ -7,12 +7,13 @@ const baseUrl = "http://localhost:9090";
 export default function App() {
   // Call /assets API to list of available videos
   const [videos, setVideos] = useState([]);
-  const [selectedVideoId, setSelectedVideoId] = useState(null);
+  const [selectedVideo, setSelectedVideo] = useState(null);
 
   useEffect(() => {
     fetch(`${baseUrl}/assets`)
       .then((response) => response.json())
       .then((data) => {
+        console.log("videos", data);
         setVideos(data.videos || []);
       })
       .catch((error) => console.error("Error fetching videos:", error));
@@ -24,8 +25,8 @@ export default function App() {
       <div
         style={{ display: "flex", flexDirection: "row", alignItems: "center" }}
       >
-        <VideoList videos={videos} onSelect={setSelectedVideoId} />
-        {selectedVideoId && <VideoPlayer src={getVideoSrc(selectedVideoId)} />}
+        <VideoList videos={videos} onSelect={setSelectedVideo} />
+        {selectedVideo && <HLSVideoPlayer src={getVideoSrc(selectedVideo)} />}
       </div>
     </div>
   );
@@ -36,9 +37,12 @@ function VideoList({ videos, onSelect }) {
     <div>
       <h4>Available Videos</h4>
       <ol>
-        {videos.map((id) => (
-          <li key={id} style={{ fontSize: "14px" }}>
-            <button onClick={() => onSelect(id)}>{id}</button>
+        {videos.map((video) => (
+          <li key={video.id} style={{ fontSize: "14px" }}>
+            <button onClick={() => onSelect(video)}>
+              {video.id}
+              {video.abr ? " | ABR" : " | No-ABR"}
+            </button>
           </li>
         ))}
       </ol>
@@ -46,27 +50,73 @@ function VideoList({ videos, onSelect }) {
   );
 }
 
-function VideoPlayer({ src }) {
-  const ref = useRef(null);
+function HLSVideoPlayer({ src }) {
+  const videoRef = useRef(null);
+  const [levels, setLevels] = useState([]); // [{id, label}]
+  const [hlsObj, setHlsObj] = useState(null);
 
   useEffect(() => {
-    if (Hls.isSupported() && ref.current) {
+    if (canPlayNativeHls) {
+      // ⇢ Safari
+      const v = videoRef.current;
+      if (v) v.src = src;
+      return;
+    }
+
+    if (Hls.isSupported() && videoRef.current) {
+      // ⇢ hls.js path
       const hls = new Hls();
       hls.loadSource(src);
-      console.log("HLS Source Loaded:", src);
-      hls.attachMedia(ref.current);
+      hls.attachMedia(videoRef.current);
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        const opts = hls.levels.map((l, i) => ({
+          id: i,
+          label: l.height
+            ? `${l.height}p`
+            : `${Math.round(l.bitrate / 1000)} kbps`,
+        }));
+        setLevels([{ id: -1, label: "Auto" }, ...opts]);
+      });
+
+      setHlsObj(hls);
       return () => hls.destroy();
     }
   }, [src]);
 
+  // Change resil
+  const handleChangeResolution = (e) => {
+    const level = parseInt(e.target.value, 10);
+    if (hlsObj) hlsObj.currentLevel = level; // -1 = Auto
+  };
+
   return (
     <div>
       <h4>Playing: {src}</h4>
-      <video ref={ref} controls style={{ width: "300px" }} />
+      <video ref={videoRef} controls style={{ width: "400px" }} />
+      {/* Resolutions */}
+      {!canPlayNativeHls && levels.length > 1 && (
+        <select onChange={handleChangeResolution} style={{ marginTop: 8 }}>
+          {levels.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }
 
-function getVideoSrc(videoId) {
-  return `${baseUrl}/assets/${videoId}/playlist.m3u8`;
+const canPlayNativeHls = (() => {
+  const video = document.createElement("video");
+  return video.canPlayType("application/vnd.apple.mpegurl");
+})();
+
+function getVideoSrc(video) {
+  if (video.abr) {
+    return `${baseUrl}/assets/abr/${video.id}/master.m3u8`;
+  }
+
+  return `${baseUrl}/assets/${video.id}/playlist.m3u8`;
 }

@@ -3,10 +3,12 @@ package transcoder
 // Multi Rendition HLS transcoding
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"os/exec"
 
 	"github.com/harshjoeyit/video-streaming/storage"
-	ffmpeg "github.com/u2takey/ffmpeg-go"
 )
 
 // TranscodeToMultiRenditionHLS transcodes MP4 video file to HLS format
@@ -19,39 +21,42 @@ func TranscodeToMultiRenditionHLS(fileId string) error {
 		return fmt.Errorf("failed to create dir for segments: %w", err)
 	}
 
+	masterFile := "master.m3u8"
+	progPath := fmt.Sprintf("%s/v%%v/prog.m3u8", dstDir)
 	segPatternPath := fmt.Sprintf("%s/v%%v/seg_%%03d.ts", dstDir)
 
-	return ffmpeg.
-		Input(src).
-		Output(
-			fmt.Sprintf("%s/v%%v/prog.m3u8", dstDir),
-			ffmpeg.KwArgs{
-				"filter_complex": "[0:v]split=3[v1][v2][v3];" +
-					"[v1]scale=w=426:h=240[v1out];" +
-					"[v2]scale=w=854:h=480[v2out];" +
-					"[v3]scale=w=1280:h=720[v3out]",
-				"map":                  "[v1out]",
-				"map:1":                "[v2out]",
-				"map:2":                "[v3out]",
-				"map:a":                "0:a",
-				"c:v:0":                "libx264",
-				"b:v:0":                "400k",
-				"c:v:1":                "libx264",
-				"b:v:1":                "800k",
-				"c:v:2":                "libx264",
-				"b:v:2":                "2000k",
-				"c:a":                  "aac",
-				"b:a":                  "96k",
-				"f":                    "hls",
-				"hls_time":             "6",
-				"hls_playlist_type":    "vod",
-				"master_pl_name":       "master.m3u8",
-				"hls_segment_filename": segPatternPath,
-				"var_stream_map":       "v:0,a:0 v:1,a:0 v:2,a:0",
-			},
-		).
-		OverWriteOutput().
-		GlobalArgs("-progress", "pipe:2", "-nostats").
-		ErrorToStdOut().
-		Run()
+	// Note: ffmpeg-go library is not consistent with multiple same
+	// named flags, for eg. -map. Hence using cmd.exec()
+	cmd := exec.CommandContext(context.Background(), "ffmpeg",
+		"-i", src,
+		// video+audio mappings
+		"-map", "0:v", "-map", "0:a",
+		"-map", "0:v", "-map", "0:a",
+		"-map", "0:v", "-map", "0:a",
+		// video encoding settings (for 3 streams)
+		"-c:v", "libx264",
+		"-s:v:0", "426x240", "-b:v:0", "400k",
+		"-s:v:1", "854x480", "-b:v:1", "800k",
+		"-s:v:2", "1280x720", "-b:v:2", "2000k",
+		// audio encoding settings (for 3 streams)
+		"-c:a", "aac",
+		"-b:a:0", "96k",
+		"-b:a:1", "96k",
+		"-b:a:2", "96k",
+		// HLS output options
+		"-f", "hls",
+		"-hls_time", "6",
+		// Video on Demand
+		"-hls_playlist_type", "vod",
+		"-hls_segment_filename", segPatternPath,
+		"-master_pl_name", masterFile,
+		// // map the streams to names (240p, 480p, 720p)
+		"-var_stream_map", "v:0,a:0,name:240p v:1,a:1,name:480p v:2,a:2,name:720p",
+		progPath,
+	)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
 }
